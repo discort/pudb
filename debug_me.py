@@ -46,6 +46,7 @@ def fermat(n):
 
 print("SF %s" % simple_func(10))
 
+import pudb; pudb.set_trace()
 for i in fermat(2):
     print(i)
 

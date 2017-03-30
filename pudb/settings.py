@@ -3,38 +3,22 @@ from __future__ import absolute_import, division, print_function
 import os
 import sys
 
-from pudb.py3compat import PY3
-if PY3:
-    from configparser import ConfigParser
-else:
-    from ConfigParser import ConfigParser
+from pudb.py3compat import ConfigParser
+from pudb.lowlevel import get_breakpoint_invalid_reason
 
 # minor LGPL violation: stolen from python-xdg
 
 _home = os.environ.get('HOME', None)
-xdg_data_home = os.environ.get('XDG_DATA_HOME',
-            os.path.join(_home, '.local', 'share') if _home else None)
+# xdg_data_home = os.environ.get('XDG_DATA_HOME',
+#             os.path.join(_home, '.local', 'share') if _home else None)
 
-xdg_config_home = os.environ.get('XDG_CONFIG_HOME',
-            os.path.join(_home, '.config') if _home else None)
+XDG_CONFIG_HOME = os.environ.get('XDG_CONFIG_HOME',
+                                 os.path.join(_home, '.config') if _home else None)
 
-xdg_config_dirs = [xdg_config_home] if xdg_config_home else [] + \
-    os.environ.get('XDG_CONFIG_DIRS', '/etc/xdg').split(':')
-
-
-def get_save_config_path(*resource):
-    if xdg_config_home is None:
-        return None
-    if not resource:
-        resource = [XDG_CONF_RESOURCE]
-    resource = os.path.join(*resource)
-    assert not resource.startswith('/')
-    path = os.path.join(xdg_config_home, resource)
-    if not os.path.isdir(path):
-        os.makedirs(path, 448)  # 0o700
-    return path
-
-# end LGPL violation
+if XDG_CONFIG_HOME:
+    XDG_CONFIG_DIRS = [XDG_CONFIG_HOME]
+else:
+    XDG_CONFIG_DIRS = os.environ.get('XDG_CONFIG_DIRS', '/etc/xdg').split(':')
 
 
 CONF_SECTION = "pudb"
@@ -45,6 +29,20 @@ SAVED_BREAKPOINTS_FILE_NAME = "saved-breakpoints-%d.%d" % sys.version_info[:2]
 BREAKPOINTS_FILE_NAME = "breakpoints-%d.%d" % sys.version_info[:2]
 
 
+def get_save_config_path(*resource):
+    if XDG_CONFIG_HOME is None:
+        return None
+    if not resource:
+        resource = [XDG_CONF_RESOURCE]
+    resource = os.path.join(*resource)
+    assert not resource.startswith('/')
+    path = os.path.join(XDG_CONFIG_HOME, resource)
+    if not os.path.isdir(path):
+        os.makedirs(path, 448)  # 0o700
+    return path
+
+# end LGPL violation
+
 def load_config():
     from os.path import join, isdir
 
@@ -54,7 +52,7 @@ def load_config():
     try:
         cparser.read([
             join(cdir, XDG_CONF_RESOURCE, CONF_FILE_NAME)
-            for cdir in xdg_config_dirs if isdir(cdir)])
+            for cdir in XDG_CONFIG_DIRS if isdir(cdir)])
 
         if cparser.has_section(CONF_SECTION):
             conf_dict.update(dict(cparser.items(CONF_SECTION)))
@@ -420,7 +418,7 @@ def parse_breakpoints(lines):
 
         if comma > 0:
             # parse stuff after comma: "condition"
-            cond = arg[comma+1:].lstrip()
+            cond = arg[comma + 1:].lstrip()
             arg = arg[:comma].rstrip()
 
         colon = arg.rfind(':')
@@ -437,7 +435,7 @@ def parse_breakpoints(lines):
             else:
                 filename = f
 
-            arg = arg[colon+1:].lstrip()
+            arg = arg[colon + 1:].lstrip()
             try:
                 lineno = int(arg)
             except ValueError:
@@ -445,7 +443,6 @@ def parse_breakpoints(lines):
         else:
             continue
 
-        from pudb.lowlevel import get_breakpoint_invalid_reason
         if get_breakpoint_invalid_reason(filename, lineno) is None:
             breakpoints.append((filename, lineno, False, cond, funcname))
 
@@ -462,13 +459,14 @@ def get_breakpoints_file_name():
 
 
 def load_breakpoints():
+    """Load saved breakpoints from files"""
     from os.path import join, isdir
 
-    file_names = [
-            join(cdir, XDG_CONF_RESOURCE, name)
-            for cdir in xdg_config_dirs if isdir(cdir)
-            for name in [SAVED_BREAKPOINTS_FILE_NAME, BREAKPOINTS_FILE_NAME]
-            ]
+    file_names = []
+    for cdir in XDG_CONFIG_DIRS:
+        if isdir(cdir):
+            for name in [SAVED_BREAKPOINTS_FILE_NAME, BREAKPOINTS_FILE_NAME]:
+                file_names.append(join(cdir, XDG_CONF_RESOURCE, name))
 
     lines = []
     for fname in file_names:

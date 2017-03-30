@@ -3,6 +3,8 @@
 # {{{ constants and imports
 
 from __future__ import absolute_import, division, print_function
+import types
+
 import urwid
 
 try:
@@ -11,14 +13,16 @@ try:
 except ImportError:
     HAVE_NUMPY = 0
 
-from pudb.py3compat import PY3, execfile, raw_input, xrange, \
-        integer_types, string_types
+from pudb.py3compat import PY3, execfile, raw_input, xrange, integer_types, string_types
 if PY3:
     ELLIPSIS = '…'
 else:
     ELLIPSIS = unicode('…', 'utf-8')  # noqa: F821
 
-from pudb.debugger import CONFIG
+from pudb.settings import load_config, save_config
+
+CONFIG = load_config()
+save_config(CONFIG)
 
 # }}}
 
@@ -32,11 +36,9 @@ class FrameVarInfo(object):
 
     def get_inspect_info(self, id_path, read_only):
         if read_only:
-            return self.id_path_to_iinfo.get(
-                    id_path, InspectInfo())
+            return self.id_path_to_iinfo.get(id_path, InspectInfo())
         else:
-            return self.id_path_to_iinfo.setdefault(
-                    id_path, InspectInfo())
+            return self.id_path_to_iinfo.setdefault(id_path, InspectInfo())
 
 
 class InspectInfo(object):
@@ -65,14 +67,13 @@ class WatchEvalError(object):
 # {{{ safe types
 
 def get_str_safe_types():
-    import types
+    safe_types = ("BuiltinFunctionType BuiltinMethodType  ClassType "
+                  "CodeType FileType FrameType FunctionType GetSetDescriptorType "
+                  "LambdaType MemberDescriptorType MethodType ModuleType "
+                  "SliceType TypeType TracebackType UnboundMethodType XRangeType")
+    return tuple(getattr(types, s) for s in safe_types.split()
+                 if hasattr(types, s)) + (WatchEvalError,)
 
-    return tuple(getattr(types, s) for s in
-        "BuiltinFunctionType BuiltinMethodType  ClassType "
-        "CodeType FileType FrameType FunctionType GetSetDescriptorType "
-        "LambdaType MemberDescriptorType MethodType ModuleType "
-        "SliceType TypeType TracebackType UnboundMethodType XRangeType".split()
-        if hasattr(types, s)) + (WatchEvalError,)
 
 
 STR_SAFE_TYPES = get_str_safe_types()
@@ -83,8 +84,10 @@ STR_SAFE_TYPES = get_str_safe_types()
 # {{{ widget
 
 class VariableWidget(urwid.FlowWidget):
+    SIZE_LIMIT = 20
+
     def __init__(self, prefix, var_label, value_str, id_path=None, attr_prefix=None,
-            watch_expr=None, iinfo=None):
+                 watch_expr=None, iinfo=None):
         self.prefix = prefix
         self.var_label = var_label
         self.value_str = value_str
@@ -98,8 +101,6 @@ class VariableWidget(urwid.FlowWidget):
 
     def selectable(self):
         return True
-
-    SIZE_LIMIT = 20
 
     def _get_text(self, size):
         maxcol = size[0] - len(self.prefix)  # self.prefix is a padding
@@ -142,16 +143,12 @@ class VariableWidget(urwid.FlowWidget):
 
             extralabel_full, extralabel_rem = divmod(len(var_label[maxcol:]), maxcol)
             totallen = sum([len(i) for i in text])
-            labellen = (
-                    len(self.prefix)  # Padding of first line
-
-                    + (len(self.prefix) + 2)  # Padding of subsequent lines
-                    * (extralabel_full + bool(extralabel_rem))
-
-                    + len(var_label)
-
-                    + 2  # for ": "
-                    )
+            labellen = (len(self.prefix)  # Padding of first line
+                + (len(self.prefix) + 2)  # Padding of subsequent lines
+                * (extralabel_full + bool(extralabel_rem))
+                + len(var_label)
+                + 2  # for ": "
+            )
 
             _attr = [(apfx+"label", labellen), (apfx+"value", totallen - labellen)]
             from urwid.util import rle_subseg
@@ -192,7 +189,7 @@ class VariableWidget(urwid.FlowWidget):
             attr = [[(apfx+"label", len(self.prefix) + len(self.var_label)), ]]
 
         # Ellipses to show text was cut off
-        #encoding = urwid.util.detected_encoding
+        # encoding = urwid.util.detected_encoding
 
         if False:  # encoding[:3] == "UTF":
             # Unicode is supported, use single character ellipsis
@@ -304,8 +301,7 @@ class ValueWalker:
                     marker += "+()"
                 displayed_value += " [%s]" % marker
 
-            self.add_item(prefix, label,
-                displayed_value, id_path, attr_prefix)
+            self.add_item(prefix, label, displayed_value, id_path, attr_prefix)
 
             if not iinfo.show_detail:
                 return
@@ -448,8 +444,8 @@ class WatchValueWalker(ValueWalker):
             attr_prefix = "highlighted var"
 
         self.widget_list.append(
-                VariableWidget(prefix, var_label, value_str, id_path, attr_prefix,
-                    watch_expr=self.watch_expr, iinfo=iinfo))
+            VariableWidget(prefix, var_label, value_str, id_path, attr_prefix,
+                           watch_expr=self.watch_expr, iinfo=iinfo))
 
 
 class TopAndMainVariableWalker(ValueWalker):
