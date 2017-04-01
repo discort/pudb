@@ -4,7 +4,7 @@ import os
 import sys
 
 from pudb.py3compat import ConfigParser
-from pudb.lowlevel import get_breakpoint_invalid_reason
+from pudb.lowlevel import get_breakpoint_invalid_reason, lookup_module
 
 # minor LGPL violation: stolen from python-xdg
 
@@ -426,8 +426,6 @@ def parse_breakpoints(lines):
 
         if colon > 0:
             filename = arg[:colon].strip()
-
-            from pudb.lowlevel import lookup_module
             f = lookup_module(filename)
 
             if not f:
@@ -459,7 +457,11 @@ def get_breakpoints_file_name():
 
 
 def load_breakpoints():
-    """Load saved breakpoints from files"""
+    """
+    Loads and check saved breakpoints out from files
+
+    Returns: list of tuples
+    """
     from os.path import join, isdir
 
     file_names = []
@@ -483,13 +485,14 @@ def load_breakpoints():
 
 def save_breakpoints(bp_list):
     """
-    :arg bp_list: a list of tuples `(file_name, line)`
+    :arg bp_list: a list of `bdb.Breakpoint` objects
     """
 
     save_path = get_breakpoints_file_name()
     if not save_path:
         return
-    histfile = open(get_breakpoints_file_name(), 'w')
+
+    histfile = open(save_path, 'w')
     bp_list = set([(bp.file, bp.line, bp.cond) for bp in bp_list])
     for bp in bp_list:
         line = "b %s:%d" % (bp[0], bp[1])
