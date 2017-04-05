@@ -2,6 +2,9 @@ from __future__ import absolute_import, division, print_function
 
 import os
 import sys
+from os.path import join, isdir
+
+import urwid
 
 from pudb.py3compat import ConfigParser
 from pudb.lowlevel import get_breakpoint_invalid_reason, lookup_module
@@ -43,9 +46,94 @@ def get_save_config_path(*resource):
 
 # end LGPL violation
 
-def load_config():
-    from os.path import join, isdir
+class Config(object):
+    """
+    The Config object contains the configuration information
+    """
+    DEFAULT_VARIABLES = {
+        'shell': 'internal',
+        'theme': 'classic',
+        'line_numbers': False,
+        'seen_welcome': 'a',
 
+        'sidebar_width': 0.5,
+        'variables_weight': 1,
+        'stack_weight': 1,
+        'breakpoints_weight': 1,
+
+        'current_stack_frame': 'top',
+
+        'stringifier': 'type',
+        'custom_theme': '',
+        'custom_stringifier': '',
+
+        'wrap_variables': True,
+
+        'display': 'auto',
+
+        'prompt_on_quit': True,
+    }
+
+    def __init__(self, config_parser=None):
+        if not config_parser:
+            self.cparser = ConfigParser()
+
+        self._conf_variables = {}
+
+        self._load()
+
+        for var, value in self.DEFAULT_VARIABLES:
+            self._conf_variables.setdefault(var, value)
+        for var in ('line_numbers', 'wrap_variables', 'prompt_on_quit'):
+            self._normalize_bool_inplace(var)
+
+    def _load(self):
+        """
+        Loads variables from configuration files
+        """
+        try:
+            self.__load_internal()
+        except Exception:
+            pass
+
+    def __load_internal(self):
+        for cdir in XDG_CONFIG_DIRS:
+            if isdir(cdir):
+                self.cparser.read([join(cdir, XDG_CONF_RESOURCE, CONF_FILE_NAME)])
+
+        if self.cparser.has_section(CONF_SECTION):
+            self._conf_variables.update(dict(self.cparser.items(CONF_SECTION)))
+
+    def save(self):
+        self.cparser.add_section(CONF_SECTION)
+
+        for key in sorted(self._conf_variables):
+            self.cparser.set(CONF_SECTION, key, str(self._conf_variables[key]))
+
+    def get_variable(self, name):
+        """
+        Retrive the variable value from a config
+        """
+        if name in self._conf_variables:
+            return self._conf_variables[name]
+
+    def set_variable(self, name, value):
+        """
+        Set configuration variable to a specific value
+        """
+        self._conf_variables[name] = value
+
+    def _normalize_bool_inplace(self, name):
+        if name not in self._conf_variables:
+            return
+
+        if self._conf_variables[name].lower() in ["0", "false", "off"]:
+            self._conf_variables[name] = False
+        else:
+            self._conf_variables[name] = True
+
+
+def load_config():
     cparser = ConfigParser()
 
     conf_dict = {}
@@ -99,8 +187,6 @@ def load_config():
 
 
 def save_config(conf_dict):
-    from os.path import join
-
     cparser = ConfigParser()
     cparser.add_section(CONF_SECTION)
 
@@ -119,8 +205,6 @@ def save_config(conf_dict):
 
 
 def edit_config(ui, conf_dict):
-    import urwid
-
     old_conf_dict = conf_dict.copy()
 
     def _update_theme():
@@ -323,10 +407,8 @@ def edit_config(ui, conf_dict):
     displays = ["auto", "raw", "curses"]
 
     display_rb_group = []
-    display_rbs = [
-            urwid.RadioButton(display_rb_group, name,
-                conf_dict["display"] == name)
-            for name in displays]
+    display_rbs = [urwid.RadioButton(display_rb_group, name, conf_dict["display"] == name)
+                   for name in displays]
 
     # }}}
 
@@ -364,11 +446,7 @@ def edit_config(ui, conf_dict):
 
     lb = urwid.ListBox(urwid.SimpleListWalker(lb_contents))
 
-    if ui.dialog(lb,         [
-            ("OK", True),
-            ("Cancel", False),
-            ],
-            title="Edit Preferences"):
+    if ui.dialog(lb, [("OK", True), ("Cancel", False)], title="Edit Preferences"):
         # Only update the settings here that instant-apply (above) doesn't take
         # care of.
 
