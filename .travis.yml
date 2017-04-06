@@ -12,6 +12,6 @@ install: "pip install -r requirements.dev.txt"
 script: pytest --cov=pudb test
 
 after_success:
-  - eval "codecov --token=c15f6318-87e5-4fce-a9f7-2ed1358e65c3"
+  - upload_coverage.sh
 
 sudo: false
