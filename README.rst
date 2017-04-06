@@ -1,5 +1,8 @@
-[![Build Status](https://travis-ci.org/discort/pudb.svg?branch=master)](https://travis-ci.org/discort/pudb)
-[![Coverage](https://codecov.io/gh/discort/pudb/branch/master/graph/badge.svg)](https://codecov.io/gh/discort/pudb)
+.. image:: https://travis-ci.org/discort/pudb.svg?branch=master
+    :target: https://travis-ci.org/discort/pudb
+
+.. image:: https://codecov.io/gh/discort/pudb/branch/master/graph/badge.svg
+  :target: https://codecov.io/gh/discort/pudb
 
 PuDB is a full-screen, console-based visual debugger for Python.
 
